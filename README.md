@@ -12,3 +12,17 @@ for (let custo = 6; custo < 18; custo++) {
     () => console.log(`custo: ${custo}; tempo: ${ Date.now() - tempoInicial} ms`)
   );
 } 
+
+JSON Web Token 
+
+npm install passport 
+
+npm install passport-local
+
+npm install jsonwebtoken
+
+npm install dotenv
+
+npm install passport-http-bearer 
+
+npm install redis
