@@ -1,27 +1,12 @@
 const Usuario = require('./usuarios-modelo');
 const { InvalidArgumentError } = require('../erros');
 
-const jwt = require('jsonwebtoken');
-const blocklist = require('../../redis/blocklist-access-token');
-const allowlistRefreshToken = require('../../redis/allowlist-refresh-token');
+const tokens = require('./tokens');
+const { EmailVerificacao } = require('./emails')
 
-const crypto = require('crypto');
-const moment = require('moment');
-
-function criaTokenJWT(usuario) {
-  const payload = {
-    id: usuario.id,
-  };
-
-  const token = jwt.sign(payload, process.env.CHAVE_JWT, { expiresIn: '20s' });
-  return token;
-}
-
-async function criaTokenOpaco(usuario) {
-  const tokenOpaco = crypto.randomBytes(24).toString('hex');
-  const dataExpiracao = moment().add(5, 'd').unix();
-  await allowlistRefreshToken.adiciona(tokenOpaco, usuario.id, dataExpiracao);
-  return tokenOpaco;
+function geraEndereco(rota, id) {
+  const baseURL = process.env.BASE_URL;
+  return `${baseURL}${rota}${id}`;
 }
 
 module.exports = {
@@ -32,9 +17,14 @@ module.exports = {
       const usuario = new Usuario({
         nome,
         email,
+        emailVerificado: false
       });
       await usuario.adicionaSenha(senha);
       await usuario.adiciona();
+
+      const endereco = geraEndereco('/usuario/verifica_email/', usuario.id)
+      const emailVerificacao = new EmailVerificacao(usuario, endereco);
+      emailVerificacao.enviaEmail().catch(console.log);
 
       res.status(201).json();
     } catch (erro) {
@@ -47,8 +37,8 @@ module.exports = {
 
   async login(req, res) {
     try {
-      const accessToken = criaTokenJWT(req.user);
-      const refreshToken = await criaTokenOpaco(req.user);
+      const accessToken = tokens.access.cria(req.user.id);
+      const refreshToken = await tokens.refresh.cria(req.user.id);
       res.set('Authorization', accessToken);
       res.status(200).json({ refreshToken });
     } catch (erro) {
@@ -59,7 +49,7 @@ module.exports = {
   async logout(req, res) {
     try {
       const token = req.token;
-      await blocklist.adiciona(token);
+      await tokens.access.invalida(token);
       res.status(204).json();
     } catch (erro) {
       res.status(500).json({ erro: erro.message });
